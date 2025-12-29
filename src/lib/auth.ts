@@ -10,10 +10,7 @@ const SSO_URL = 'https://login.eveonline.com/v2/oauth/authorize';
 // Scopes required for PI data
 const SCOPES = [
   'esi-planets.manage_planets.v1',
-  'esi-characters.read_planets.v1',
-  'esi-skills.read_skills.v1',
-  'esi-universe.read_structures.v1',
-  'esi-search.search_structures.v1'
+  'esi-planets.read_customs_offices.v1'
 ].join(' ');
 
 /**
