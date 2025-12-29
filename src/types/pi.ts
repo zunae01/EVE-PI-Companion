@@ -31,6 +31,10 @@ export interface Planet {
   numPins?: number;
   numLinks?: number;
   numRoutes?: number;
+  throughputPerHour?: number; // simulated output units/hr
+  profitPerHour?: number; // simulated ISK/hr
+  pocoTax?: number; // %
+  outputMaterialId?: number; // for simulation: what commodity is produced
 }
 
 export type PinType = 'Command Center' | 'Extractor Control Unit' | 'Basic Industry' | 'Advanced Industry' | 'High Tech Production' | 'Launchpad' | 'Storage Facility';

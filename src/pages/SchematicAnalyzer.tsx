@@ -1,20 +1,42 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MATERIALS, SCHEMATICS } from '../data/schematics';
+import { Material } from '../types/pi';
 import { buildProductionTree, ProductionNode, getRawRequirements } from '../lib/chain';
-import { ChevronRight, ChevronDown, Package, Box, Gauge } from 'lucide-react';
-import { cn } from '../components/PlanetCard'; // Reusing utility
+import { ChevronRight, ChevronDown, Package, Box, Gauge, RefreshCw, AlertTriangle } from 'lucide-react';
+import { cn } from '../components/PlanetCard';
+import { useMarketStore, isStale } from '../store/marketStore';
 
 type SchematicByOutput = Record<number, typeof SCHEMATICS[keyof typeof SCHEMATICS]>;
-type PlanetResourceMap = Record<string, { id: number; name: string }[]>;
+type PlanetResourceMap = Record<string, string[]>;
 
-const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: SchematicByOutput; planetResourceMap: PlanetResourceMap; children: React.ReactNode }> = ({ materialId, schematicByOutput, planetResourceMap, children }) => {
+const planetResourceMap: PlanetResourceMap = {
+  Barren: ['Aqueous Liquids', 'Base Metals', 'Noble Metals', 'Carbon Compounds', 'Microorganisms'],
+  Temperate: ['Autotrophs', 'Base Metals', 'Noble Metals', 'Carbon Compounds', 'Microorganisms'],
+  Oceanic: ['Aqueous Liquids', 'Carbon Compounds', 'Microorganisms', 'Planktic Colonies', 'Complex Organisms'],
+  Storm: ['Aqueous Liquids', 'Ionic Solutions', 'Noble Gas', 'Reactive Gas', 'Suspended Plasma'],
+  Gas: ['Aqueous Liquids', 'Ionic Solutions', 'Noble Gas', 'Reactive Gas', 'Suspended Plasma'],
+  Ice: ['Aqueous Liquids', 'Heavy Metals', 'Noble Gas', 'Planktic Colonies', 'Suspended Plasma'],
+  Lava: ['Base Metals', 'Felsic Magma', 'Heavy Metals', 'Non-CS Crystals', 'Suspended Plasma'],
+  Plasma: ['Base Metals', 'Felsic Magma', 'Heavy Metals', 'Noble Metals', 'Suspended Plasma']
+};
+
+const MaterialHoverCard: React.FC<{
+  materialId: number;
+  schematicByOutput: SchematicByOutput;
+  qty?: number;
+  getPrice: (id: number) => { buyMax: number; sellMin: number } | undefined;
+  stale: boolean;
+  children: React.ReactNode;
+}> = ({ materialId, schematicByOutput, qty, getPrice, stale, children }) => {
   const [open, setOpen] = useState(false);
   const material = MATERIALS[materialId];
   const schematic = schematicByOutput[materialId];
   const inputs = schematic?.inputs ?? [];
+  const price = getPrice(materialId);
+  const stackBuy = price ? (qty ?? 0) * price.buyMax : undefined;
 
   return (
-    <div 
+    <div
       className="relative inline-flex"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
@@ -27,7 +49,7 @@ const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: Schem
               <div className="text-sm font-semibold text-white">{material.name}</div>
               <div className="text-xs text-eve-text-muted uppercase">Tier {material.tier}</div>
             </div>
-            <span className="text-[10px] font-mono text-eve-accent-blue">{material.volume.toLocaleString()} m³</span>
+            <span className="text-[10px] font-mono text-eve-accent-blue">{material.volume.toLocaleString()} m3</span>
           </div>
 
           {material.description && (
@@ -46,24 +68,45 @@ const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: Schem
                   ))}
                 </div>
               </div>
-              {material.planetTypes.map(pt => (
-                <div key={pt}>
-                  <div className="text-[11px] text-eve-text-muted uppercase mb-1">Other raw resources on {pt}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {(planetResourceMap[pt] || []).map(res => (
-                      <span
-                        key={`${pt}-${res.id}`}
-                        className={cn(
-                          "text-[11px] px-2 py-1 rounded border",
-                          res.id === material.id ? "bg-eve-accent-blue/20 text-white border-eve-accent-blue/50" : "bg-eve-dark-gray text-eve-text-muted border-eve-border/50"
-                        )}
-                      >
-                        {res.name}
-                      </span>
-                    ))}
+              {material.planetTypes.map(pt => {
+                const resources = planetResourceMap[pt] || [];
+                if (!resources.length) return null;
+                return (
+                  <div key={pt} className="space-y-1">
+                    <div className="text-[11px] text-eve-text-muted uppercase">Other raw resources on {pt}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {resources.map(name => (
+                        <span
+                          key={`${pt}-${name}`}
+                          className="text-[11px] px-2 py-1 rounded border bg-eve-dark-gray text-eve-text-muted border-eve-border/50"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
+
+          {price && (
+            <div className="mt-3 space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-eve-text-muted">Sell (input)</span>
+                <span className="text-white font-mono">{price.sellMin.toLocaleString()} ISK</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-eve-text-muted">Buy (output)</span>
+                <span className="text-white font-mono">{price.buyMax.toLocaleString()} ISK</span>
+              </div>
+              {qty !== undefined && (
+                <div className="flex justify-between">
+                  <span className="text-eve-text-muted">Stack value (qty x buy)</span>
+                  <span className="text-eve-accent-blue font-mono">{stackBuy?.toLocaleString()}</span>
                 </div>
-              ))}
+              )}
+              {stale && <div className="text-[10px] text-eve-alert-red uppercase">Stale prices</div>}
             </div>
           )}
 
@@ -97,9 +140,17 @@ const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: Schem
   );
 };
 
-const TreeNode: React.FC<{ node: ProductionNode; depth?: number; schematicByOutput: SchematicByOutput; planetResourceMap: PlanetResourceMap }> = ({ node, depth = 0, schematicByOutput, planetResourceMap }) => {
+const TreeNode: React.FC<{
+  node: ProductionNode;
+  depth?: number;
+  schematicByOutput: SchematicByOutput;
+  getPrice: (id: number) => { buyMax: number; sellMin: number } | undefined;
+  stale: boolean;
+}> = ({ node, depth = 0, schematicByOutput, getPrice, stale }) => {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children.length > 0;
+  const price = getPrice(node.material.id);
+  const stackBuy = price ? node.quantity * price.buyMax : undefined;
 
   return (
     <div className="ml-4 border-l border-eve-border pl-4 relative">
@@ -113,7 +164,7 @@ const TreeNode: React.FC<{ node: ProductionNode; depth?: number; schematicByOutp
             )}
             {!hasChildren && <div className="w-[14px]" />}
 
-            <MaterialHoverCard materialId={node.material.id} schematicByOutput={schematicByOutput} planetResourceMap={planetResourceMap}>
+            <MaterialHoverCard materialId={node.material.id} schematicByOutput={schematicByOutput} qty={node.quantity} getPrice={getPrice} stale={stale}>
               <div className={cn("flex items-center gap-2 px-2 py-1 rounded border", 
                   hasChildren ? "bg-eve-panel border-eve-border" : "bg-eve-dark-gray border-transparent")}>
                   <span className={cn("text-xs font-mono px-1 rounded", 
@@ -127,21 +178,25 @@ const TreeNode: React.FC<{ node: ProductionNode; depth?: number; schematicByOutp
                   <span className="text-xs text-eve-text-muted font-mono">x{node.quantity.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
                   <span className="text-xs text-eve-text-muted border-l border-eve-border pl-2 ml-1 flex items-center gap-1">
                       <Box size={10} />
-                      {node.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³
+                      {node.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3
                   </span>
+                  {price && (
+                    <span className="text-[11px] text-eve-accent-blue border-l border-eve-border pl-2 ml-1">
+                      {stackBuy?.toLocaleString(undefined, { maximumFractionDigits: 0 })} ISK
+                    </span>
+                  )}
               </div>
             </MaterialHoverCard>
         </div>
 
         {expanded && node.children.map((child, i) => (
-            <TreeNode key={i} node={child} depth={depth + 1} schematicByOutput={schematicByOutput} />
+            <TreeNode key={i} node={child} depth={depth + 1} schematicByOutput={schematicByOutput} getPrice={getPrice} stale={stale} />
         ))}
     </div>
   );
 };
 
 export const SchematicAnalyzer: React.FC = () => {
-    // Build list of available outputs from schematics
     const outputs = useMemo(() => Object.values(SCHEMATICS).map(s => ({
         material: MATERIALS[s.output.materialId],
         schematic: s
@@ -152,6 +207,10 @@ export const SchematicAnalyzer: React.FC = () => {
     const [query, setQuery] = useState('');
     const [tierFilter, setTierFilter] = useState<Material['tier'] | 'ALL'>('ALL');
 
+    const { prices, lastUpdated, status, error: priceError, refreshPrices, getPrice } = useMarketStore();
+    const priceLookup = useMemo(() => (id: number) => prices[id], [prices]);
+    const stalePrices = isStale(lastUpdated);
+
     const schematic = useMemo(() => outputs.find(o => o.material.id === selectedId)?.schematic, [outputs, selectedId]);
     const cyclesPerHour = schematic ? 3600 / schematic.cycleTime : 0;
     const perCycle = schematic?.output.quantity ?? 0;
@@ -161,22 +220,6 @@ export const SchematicAnalyzer: React.FC = () => {
       const map: SchematicByOutput = {};
       Object.values(SCHEMATICS).forEach(s => {
         map[s.output.materialId] = s;
-      });
-      return map;
-    }, []);
-
-    const planetResourceMap: PlanetResourceMap = useMemo(() => {
-      const map: PlanetResourceMap = {};
-      Object.values(MATERIALS)
-        .filter(m => m.tier === 'P0' && m.planetTypes)
-        .forEach(m => {
-          m.planetTypes!.forEach(pt => {
-            if (!map[pt]) map[pt] = [];
-            map[pt].push({ id: m.id, name: m.name });
-          });
-        });
-      Object.keys(map).forEach(pt => {
-        map[pt].sort((a, b) => a.name.localeCompare(b.name));
       });
       return map;
     }, []);
@@ -195,7 +238,6 @@ export const SchematicAnalyzer: React.FC = () => {
         });
     }, [outputs, query, tierFilter]);
 
-    // Keep selection valid when filters change
     useEffect(() => {
       const exists = filteredOutputs.some(o => o.material.id === selectedId);
       if (!exists && filteredOutputs[0]) {
@@ -203,17 +245,55 @@ export const SchematicAnalyzer: React.FC = () => {
       }
     }, [filteredOutputs, selectedId]);
 
-    const tree = buildProductionTree(selectedId, targetPerHour); // Analyze target/hour
+    useEffect(() => {
+      if (!lastUpdated && status === 'idle') {
+        refreshPrices();
+      }
+    }, [lastUpdated, status, refreshPrices]);
+
+    const tree = buildProductionTree(selectedId, targetPerHour);
     if (!tree) return <div>Invalid Schematic Selection</div>;
 
     const rawReqs = getRawRequirements(tree);
+    const outputPrice = priceLookup(selectedId);
+    const outputValueHr = outputPrice ? targetPerHour * outputPrice.buyMax : undefined;
+    const inputCostHr = Object.entries(rawReqs).reduce((acc, [id, qty]) => {
+      const p = priceLookup(Number(id));
+      if (!p) return acc;
+      return acc + qty * p.sellMin;
+    }, 0);
+    const marginHr = outputValueHr !== undefined ? outputValueHr - inputCostHr : undefined;
 
     return (
         <div className="p-6">
-            <h2 className="text-xl font-bold text-white mb-6 uppercase flex items-center gap-2">
-                <Package className="text-eve-accent-gold" />
-                Recursive Production Chain
-            </h2>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+              <h2 className="text-xl font-bold text-white uppercase flex items-center gap-2">
+                  <Package className="text-eve-accent-gold" />
+                  Recursive Production Chain
+              </h2>
+              <div className="flex items-center gap-3 text-xs">
+                <div className={cn("px-3 py-2 rounded border", stalePrices ? "border-eve-alert-red text-eve-alert-red" : "border-eve-border text-eve-text-muted")}>
+                  {stalePrices ? "Prices stale" : "Prices fresh"} {lastUpdated ? `(${new Date(lastUpdated).toLocaleTimeString()})` : '(not loaded)'}
+                </div>
+                <button
+                  onClick={() => refreshPrices()}
+                  className="flex items-center gap-2 bg-eve-accent-blue/10 hover:bg-eve-accent-blue/20 text-eve-accent-blue border border-eve-accent-blue/50 px-3 py-2 rounded transition-all uppercase tracking-wider"
+                >
+                  <RefreshCw size={14} className={status === 'loading' ? 'animate-spin' : ''} />
+                  Refresh Prices
+                </button>
+              </div>
+            </div>
+
+            {priceError && (
+              <div className="mb-4 flex items-start gap-3 text-eve-alert-red bg-eve-panel/40 border border-eve-alert-red/40 px-4 py-3 rounded">
+                <AlertTriangle size={18} />
+                <div>
+                  <div className="font-semibold">Price fetch failed</div>
+                  <div className="text-sm text-eve-text-muted">{priceError}</div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-eve-panel p-4 rounded border border-eve-border">
@@ -293,7 +373,7 @@ export const SchematicAnalyzer: React.FC = () => {
                 <div className="lg:col-span-2 bg-eve-panel/30 p-4 rounded border border-eve-border">
                     <h3 className="text-sm font-semibold text-eve-text-muted mb-4 uppercase tracking-wider">Dependency Graph ({targetPerHour} Units/hr)</h3>
                     <div className="-ml-4">
-                        <TreeNode node={tree} schematicByOutput={schematicByOutput} planetResourceMap={planetResourceMap} />
+                        <TreeNode node={tree} schematicByOutput={schematicByOutput} getPrice={priceLookup} stale={stalePrices} />
                     </div>
                 </div>
 
@@ -303,7 +383,21 @@ export const SchematicAnalyzer: React.FC = () => {
                     <div className="space-y-4">
                         <div className="bg-eve-dark-gray p-3 rounded">
                             <span className="block text-xs text-eve-text-muted">Total Output Volume (per hour)</span>
-                            <span className="text-lg font-mono text-white">{tree.totalVolume.toLocaleString()} m³</span>
+                            <span className="text-lg font-mono text-white">{tree.totalVolume.toLocaleString()} m3</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div className="bg-eve-dark-gray p-3 rounded border border-eve-border/50">
+                            <div className="text-eve-text-muted uppercase">Output Value/hr</div>
+                            <div className="text-white font-mono text-sm">{outputValueHr !== undefined ? `${outputValueHr.toLocaleString()} ISK` : 'N/A'}</div>
+                          </div>
+                          <div className="bg-eve-dark-gray p-3 rounded border border-eve-border/50">
+                            <div className="text-eve-text-muted uppercase">Input Cost/hr</div>
+                            <div className="text-white font-mono text-sm">{Number.isFinite(inputCostHr) ? `${inputCostHr.toLocaleString()} ISK` : 'N/A'}</div>
+                          </div>
+                          <div className="bg-eve-dark-gray p-3 rounded border border-eve-border/50">
+                            <div className="text-eve-text-muted uppercase">Margin/hr</div>
+                            <div className={cn("font-mono text-sm", (marginHr ?? 0) >= 0 ? "text-eve-accent-blue" : "text-eve-alert-red")}>{marginHr !== undefined ? `${marginHr.toLocaleString()} ISK` : 'N/A'}</div>
+                          </div>
                         </div>
 
                         <div>

@@ -7,13 +7,16 @@ import { twMerge } from 'tailwind-merge';
 interface PlanetCardProps {
   planet: Planet;
   onClick: () => void;
+  pricePerUnit?: number;
+  revenuePerHour?: number;
+  readOnly?: boolean;
 }
 
 export function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
-export const PlanetCard: React.FC<PlanetCardProps> = ({ planet, onClick }) => {
+export const PlanetCard: React.FC<PlanetCardProps> = ({ planet, onClick, pricePerUnit, revenuePerHour, readOnly }) => {
   const formatTimestamp = (ts?: string) => {
     if (!ts) return 'Unknown';
     const d = new Date(ts);
@@ -24,7 +27,7 @@ export const PlanetCard: React.FC<PlanetCardProps> = ({ planet, onClick }) => {
   return (
     <div 
       onClick={onClick}
-      className="group relative bg-eve-panel border border-eve-border rounded-sm p-4 hover:border-eve-accent-blue transition-all cursor-pointer overflow-hidden"
+      className={cn("group relative bg-eve-panel border border-eve-border rounded-sm p-4 transition-all overflow-hidden", readOnly ? "cursor-default" : "hover:border-eve-accent-blue cursor-pointer")}
     >
       {/* Decorative Corner */}
       <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-eve-accent-blue opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -60,6 +63,27 @@ export const PlanetCard: React.FC<PlanetCardProps> = ({ planet, onClick }) => {
           <span className="flex items-center gap-1"><Zap size={12} /> Last Update</span>
           <span className="text-white text-right">{formatTimestamp(planet.lastUpdate)}</span>
         </div>
+
+        {planet.throughputPerHour !== undefined && (
+          <div className="flex justify-between">
+            <span className="flex items-center gap-1"><Zap size={12} /> Output/hr</span>
+            <span className="text-white">{planet.throughputPerHour.toLocaleString()} {planet.outputMaterialId ? '' : 'units'}</span>
+          </div>
+        )}
+
+        {pricePerUnit !== undefined && (
+          <div className="flex justify-between">
+            <span className="flex items-center gap-1"><Zap size={12} /> Unit Price</span>
+            <span className="text-white">{pricePerUnit.toLocaleString()} ISK</span>
+          </div>
+        )}
+
+        {revenuePerHour !== undefined && (
+          <div className="flex justify-between">
+            <span className="flex items-center gap-1"><Zap size={12} /> ISK/hr</span>
+            <span className="text-eve-accent-blue">{revenuePerHour.toLocaleString()} ISK</span>
+          </div>
+        )}
       </div>
     </div>
   );
