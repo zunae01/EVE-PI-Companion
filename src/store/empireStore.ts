@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Planet, Pin, Link, PinType } from '../types/pi';
-import { PIN_COSTS, calculateLinkUsage, getPlanetCapacity } from '../lib/math';
+import { PIN_COSTS, getPlanetCapacity } from '../lib/math';
 
 interface EmpireState {
   planets: Record<number, Planet>;

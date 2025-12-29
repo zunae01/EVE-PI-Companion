@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SCHEMATICS, MATERIALS } from '../data/schematics';
+import { MATERIALS } from '../data/schematics';
 import { buildProductionTree, ProductionNode, getRawRequirements } from '../lib/chain';
 import { ChevronRight, ChevronDown, Package, Box } from 'lucide-react';
 import { cn } from '../components/PlanetCard'; // Reusing utility
@@ -48,7 +48,7 @@ const TreeNode: React.FC<{ node: ProductionNode; depth?: number }> = ({ node, de
 
 export const SchematicAnalyzer: React.FC = () => {
     // Default to a known schematic output for demo (e.g., Supertensile Plastics P2)
-    const [selectedId, setSelectedId] = useState<number>(2312); 
+    const [selectedId] = useState<number>(2312); 
     const tree = buildProductionTree(selectedId, 100); // Analyze 100 units
     
     if (!tree) return <div>Invalid Schematic Selection</div>;

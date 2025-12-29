@@ -1,7 +1,7 @@
 import React from 'react';
 import { Planet } from '../types/pi';
 import { useEmpireStore } from '../store/empireStore';
-import { Cpu, Zap, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Cpu, Zap } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 

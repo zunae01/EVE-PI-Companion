@@ -32,7 +32,7 @@ export const PIN_COSTS = {
  * Simplified approximation for prototype:
  * PG = (Distance / 1000) * 1.5 + Base
  */
-export function calculateLinkUsage(distanceKm: number, level: number = 0) {
+export function calculateLinkUsage(distanceKm: number, _level: number = 0) {
   // Base usage increases with length
   // Upgrading link (level) increases throughput but also CPU/PG cost? 
   // Actually, upgrading link simply increases capacity, cost is static per length.
@@ -46,7 +46,7 @@ export function calculateLinkUsage(distanceKm: number, level: number = 0) {
 /**
  * Returns the max CPU/PG for a given command center level + skills
  */
-export function getPlanetCapacity(ccLevel: number, skillLevel: number = 0) {
+export function getPlanetCapacity(ccLevel: number, _skillLevel: number = 0) {
   // The skill "Command Center Upgrades" boosts CPU/PG of the command center
   // Actually, the skill just allows you to upgrade the CC.
   // The levels 0-5 ARE the upgrade levels.
@@ -58,7 +58,7 @@ export function getPlanetCapacity(ccLevel: number, skillLevel: number = 0) {
 /**
  * Calculates theoretical max hourly output
  */
-export function calculateHourlyYield(schematicId: number, numFactories: number) {
+export function calculateHourlyYield(_schematicId: number, _numFactories: number) {
     // Implementation needed
     return 0;
 }
