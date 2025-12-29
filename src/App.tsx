@@ -1,8 +1,11 @@
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { SchematicAnalyzer } from './pages/SchematicAnalyzer'
-import { Activity, Globe, Box, Settings } from 'lucide-react'
+import { Callback } from './pages/Callback'
+import { Login } from './pages/Login'
+import { Activity, Globe, Box, Settings, LogOut, User } from 'lucide-react'
 import { cn } from './components/PlanetCard'
+import { useAuthStore } from './store/authStore'
 
 function NavItem({ to, icon: Icon, label }: { to: string, icon: any, label: string }) {
   const location = useLocation();
@@ -25,6 +28,9 @@ function NavItem({ to, icon: Icon, label }: { to: string, icon: any, label: stri
 }
 
 function Layout() {
+  const { characters, activeCharacterId, removeCharacter } = useAuthStore();
+  const activeChar = activeCharacterId ? characters[activeCharacterId] : null;
+
   return (
     <div className="flex h-screen bg-eve-black text-white overflow-hidden">
       {/* Sidebar */}
@@ -46,15 +52,25 @@ function Layout() {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-eve-border bg-eve-panel/30">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded bg-gradient-to-br from-eve-accent-blue to-blue-900" />
-            <div>
-              <p className="text-sm font-medium text-white">Cmdr. U240FL</p>
-              <p className="text-xs text-eve-text-muted">Omega Status</p>
+        {activeChar && (
+          <div className="p-4 border-t border-eve-border bg-eve-panel/30">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-8 w-8 rounded bg-gradient-to-br from-eve-accent-blue to-blue-900 flex items-center justify-center">
+                 <User size={16} />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium text-white truncate">{activeChar.CharacterName}</p>
+                <p className="text-xs text-eve-text-muted">Online</p>
+              </div>
             </div>
+            <button 
+                onClick={() => removeCharacter(activeChar.CharacterID)}
+                className="flex items-center gap-2 text-xs text-eve-text-muted hover:text-eve-alert-red transition-colors w-full"
+            >
+                <LogOut size={12} /> Disconnect
+            </button>
           </div>
-        </div>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -78,10 +94,28 @@ function Layout() {
   )
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+    const { activeCharacterId } = useAuthStore();
+    if (!activeCharacterId) {
+        return <Navigate to="/login" replace />;
+    }
+    return <>{children}</>;
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <Layout />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/callback" element={<Callback />} />
+        
+        {/* Protected Routes */}
+        <Route path="/*" element={
+            <ProtectedRoute>
+                <Layout />
+            </ProtectedRoute>
+        } />
+      </Routes>
     </BrowserRouter>
   )
 }
