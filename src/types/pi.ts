@@ -7,6 +7,8 @@ export interface Material {
   name: string;
   tier: MaterialTier;
   volume: number;
+  description?: string;
+  planetTypes?: string[]; // For P0 raw resources
 }
 
 export interface Schematic {
