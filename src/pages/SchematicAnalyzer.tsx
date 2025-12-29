@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { MATERIALS, SCHEMATICS } from '../data/schematics';
 import { buildProductionTree, ProductionNode, getRawRequirements } from '../lib/chain';
-import { ChevronRight, ChevronDown, Package, Box, Gauge, Info } from 'lucide-react';
+import { ChevronRight, ChevronDown, Package, Box, Gauge } from 'lucide-react';
 import { cn } from '../components/PlanetCard'; // Reusing utility
 
 type SchematicByOutput = Record<number, typeof SCHEMATICS[keyof typeof SCHEMATICS]>;
+type PlanetResourceMap = Record<string, { id: number; name: string }[]>;
 
-const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: SchematicByOutput; children: React.ReactNode }> = ({ materialId, schematicByOutput, children }) => {
+const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: SchematicByOutput; planetResourceMap: PlanetResourceMap; children: React.ReactNode }> = ({ materialId, schematicByOutput, planetResourceMap, children }) => {
   const [open, setOpen] = useState(false);
   const material = MATERIALS[materialId];
   const schematic = schematicByOutput[materialId];
@@ -34,15 +35,35 @@ const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: Schem
           )}
 
           {material.planetTypes && (
-            <div className="mt-2">
-              <div className="text-[11px] text-eve-text-muted uppercase mb-1">Found on</div>
-              <div className="flex flex-wrap gap-1">
-                {material.planetTypes.map(pt => (
-                  <span key={pt} className="text-[11px] text-white bg-eve-dark-gray px-2 py-1 rounded border border-eve-border/50">
-                    {pt}
-                  </span>
-                ))}
+            <div className="mt-2 space-y-2">
+              <div>
+                <div className="text-[11px] text-eve-text-muted uppercase mb-1">Found on</div>
+                <div className="flex flex-wrap gap-1">
+                  {material.planetTypes.map(pt => (
+                    <span key={pt} className="text-[11px] text-white bg-eve-dark-gray px-2 py-1 rounded border border-eve-border/50">
+                      {pt}
+                    </span>
+                  ))}
+                </div>
               </div>
+              {material.planetTypes.map(pt => (
+                <div key={pt}>
+                  <div className="text-[11px] text-eve-text-muted uppercase mb-1">Other raw resources on {pt}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {(planetResourceMap[pt] || []).map(res => (
+                      <span
+                        key={`${pt}-${res.id}`}
+                        className={cn(
+                          "text-[11px] px-2 py-1 rounded border",
+                          res.id === material.id ? "bg-eve-accent-blue/20 text-white border-eve-accent-blue/50" : "bg-eve-dark-gray text-eve-text-muted border-eve-border/50"
+                        )}
+                      >
+                        {res.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -76,7 +97,7 @@ const MaterialHoverCard: React.FC<{ materialId: number; schematicByOutput: Schem
   );
 };
 
-const TreeNode: React.FC<{ node: ProductionNode; depth?: number; schematicByOutput: SchematicByOutput }> = ({ node, depth = 0, schematicByOutput }) => {
+const TreeNode: React.FC<{ node: ProductionNode; depth?: number; schematicByOutput: SchematicByOutput; planetResourceMap: PlanetResourceMap }> = ({ node, depth = 0, schematicByOutput, planetResourceMap }) => {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children.length > 0;
 
@@ -92,7 +113,7 @@ const TreeNode: React.FC<{ node: ProductionNode; depth?: number; schematicByOutp
             )}
             {!hasChildren && <div className="w-[14px]" />}
 
-            <MaterialHoverCard materialId={node.material.id} schematicByOutput={schematicByOutput}>
+            <MaterialHoverCard materialId={node.material.id} schematicByOutput={schematicByOutput} planetResourceMap={planetResourceMap}>
               <div className={cn("flex items-center gap-2 px-2 py-1 rounded border", 
                   hasChildren ? "bg-eve-panel border-eve-border" : "bg-eve-dark-gray border-transparent")}>
                   <span className={cn("text-xs font-mono px-1 rounded", 
@@ -144,6 +165,22 @@ export const SchematicAnalyzer: React.FC = () => {
       return map;
     }, []);
 
+    const planetResourceMap: PlanetResourceMap = useMemo(() => {
+      const map: PlanetResourceMap = {};
+      Object.values(MATERIALS)
+        .filter(m => m.tier === 'P0' && m.planetTypes)
+        .forEach(m => {
+          m.planetTypes!.forEach(pt => {
+            if (!map[pt]) map[pt] = [];
+            map[pt].push({ id: m.id, name: m.name });
+          });
+        });
+      Object.keys(map).forEach(pt => {
+        map[pt].sort((a, b) => a.name.localeCompare(b.name));
+      });
+      return map;
+    }, []);
+
     const filteredOutputs = useMemo(() => {
       const q = query.trim().toLowerCase();
       return outputs
@@ -157,6 +194,14 @@ export const SchematicAnalyzer: React.FC = () => {
           return a.material.tier < b.material.tier ? -1 : 1;
         });
     }, [outputs, query, tierFilter]);
+
+    // Keep selection valid when filters change
+    useEffect(() => {
+      const exists = filteredOutputs.some(o => o.material.id === selectedId);
+      if (!exists && filteredOutputs[0]) {
+        setSelectedId(filteredOutputs[0].material.id);
+      }
+    }, [filteredOutputs, selectedId]);
 
     const tree = buildProductionTree(selectedId, targetPerHour); // Analyze target/hour
     if (!tree) return <div>Invalid Schematic Selection</div>;
@@ -248,7 +293,7 @@ export const SchematicAnalyzer: React.FC = () => {
                 <div className="lg:col-span-2 bg-eve-panel/30 p-4 rounded border border-eve-border">
                     <h3 className="text-sm font-semibold text-eve-text-muted mb-4 uppercase tracking-wider">Dependency Graph ({targetPerHour} Units/hr)</h3>
                     <div className="-ml-4">
-                        <TreeNode node={tree} schematicByOutput={schematicByOutput} />
+                        <TreeNode node={tree} schematicByOutput={schematicByOutput} planetResourceMap={planetResourceMap} />
                     </div>
                 </div>
 
