@@ -24,6 +24,11 @@ export interface Planet {
   radius: number; // km, affects link costs
   systemId: number;
   upgradeLevel: number; // Command Center level (0-5)
+  characterId: number;
+  lastUpdate: string;
+  numPins?: number;
+  numLinks?: number;
+  numRoutes?: number;
 }
 
 export type PinType = 'Command Center' | 'Extractor Control Unit' | 'Basic Industry' | 'Advanced Industry' | 'High Tech Production' | 'Launchpad' | 'Storage Facility';

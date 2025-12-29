@@ -1,7 +1,6 @@
 import React from 'react';
 import { Planet } from '../types/pi';
-import { useEmpireStore } from '../store/empireStore';
-import { Cpu, Zap } from 'lucide-react';
+import { Cpu, Zap, Radio, GitBranch } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -15,11 +14,12 @@ export function cn(...inputs: (string | undefined | null | false)[]) {
 }
 
 export const PlanetCard: React.FC<PlanetCardProps> = ({ planet, onClick }) => {
-  const { getPlanetStats } = useEmpireStore();
-  const stats = getPlanetStats(planet.id);
-  
-  const cpuPercent = (stats.cpuUsed / stats.cpuMax) * 100;
-  const pgPercent = (stats.pgUsed / stats.pgMax) * 100;
+  const formatTimestamp = (ts?: string) => {
+    if (!ts) return 'Unknown';
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return ts;
+    return d.toLocaleString();
+  };
 
   return (
     <div 
@@ -40,38 +40,25 @@ export const PlanetCard: React.FC<PlanetCardProps> = ({ planet, onClick }) => {
         </div>
       </div>
 
-      {/* Resource Bars */}
-      <div className="space-y-3 font-mono text-xs">
-        {/* CPU */}
-        <div>
-          <div className="flex justify-between text-eve-text-muted mb-1">
-            <span className="flex items-center gap-1"><Cpu size={12} /> CPU</span>
-            <span className={cn(cpuPercent > 100 ? "text-eve-alert-red" : "text-white")}>
-              {stats.cpuUsed.toLocaleString()} / {stats.cpuMax.toLocaleString()} tf
-            </span>
-          </div>
-          <div className="h-1 bg-eve-dark-gray w-full rounded-full overflow-hidden">
-            <div 
-              className={cn("h-full transition-all duration-500", cpuPercent > 90 ? "bg-eve-alert-red" : "bg-eve-accent-blue")} 
-              style={{ width: `${Math.min(cpuPercent, 100)}%` }} 
-            />
-          </div>
+      <div className="space-y-3 font-mono text-xs text-eve-text-muted">
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1"><Cpu size={12} /> Upgrade</span>
+          <span className="text-white">CC {planet.upgradeLevel}</span>
         </div>
 
-        {/* Powergrid */}
-        <div>
-          <div className="flex justify-between text-eve-text-muted mb-1">
-            <span className="flex items-center gap-1"><Zap size={12} /> PG</span>
-            <span className={cn(pgPercent > 100 ? "text-eve-alert-red" : "text-white")}>
-              {stats.pgUsed.toLocaleString()} / {stats.pgMax.toLocaleString()} MW
-            </span>
-          </div>
-          <div className="h-1 bg-eve-dark-gray w-full rounded-full overflow-hidden">
-            <div 
-              className={cn("h-full transition-all duration-500", pgPercent > 90 ? "bg-eve-alert-red" : "bg-eve-accent-gold")} 
-              style={{ width: `${Math.min(pgPercent, 100)}%` }} 
-            />
-          </div>
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1"><Radio size={12} /> Pins/Links</span>
+          <span className="text-white">{planet.numPins ?? 0} / {planet.numLinks ?? 0}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1"><GitBranch size={12} /> Routes</span>
+          <span className="text-white">{planet.numRoutes ?? 0}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1"><Zap size={12} /> Last Update</span>
+          <span className="text-white text-right">{formatTimestamp(planet.lastUpdate)}</span>
         </div>
       </div>
     </div>

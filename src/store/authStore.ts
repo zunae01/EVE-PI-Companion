@@ -5,7 +5,7 @@ export interface EveCharacter {
   CharacterID: number;
   CharacterName: string;
   ExpiresOn: string;
-  Scopes: string;
+  Scopes: string[];
   TokenType: string;
   CharacterOwnerHash: string;
   accessToken: string;
@@ -19,7 +19,7 @@ interface AuthState {
   addCharacter: (char: EveCharacter) => void;
   removeCharacter: (charId: number) => void;
   setActiveCharacter: (charId: number) => void;
-  updateToken: (charId: number, newToken: string, newExpiry: string) => void;
+  updateTokens: (charId: number, tokens: { accessToken: string; refreshToken?: string; expiresOn: string }) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -46,13 +46,14 @@ export const useAuthStore = create<AuthState>()(
 
       setActiveCharacter: (charId) => set({ activeCharacterId: charId }),
 
-      updateToken: (charId, newToken, newExpiry) => set((state) => ({
+      updateTokens: (charId, tokens) => set((state) => ({
         characters: {
             ...state.characters,
             [charId]: {
                 ...state.characters[charId],
-                accessToken: newToken,
-                ExpiresOn: newExpiry
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken ?? state.characters[charId]?.refreshToken,
+                ExpiresOn: tokens.expiresOn
             }
         }
       }))

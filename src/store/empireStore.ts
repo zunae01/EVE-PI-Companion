@@ -8,6 +8,8 @@ interface EmpireState {
   planets: Record<number, Planet>;
   pins: Record<string, Pin>;
   links: Record<string, Link>;
+  setPlanets: (planets: Planet[]) => void;
+  clear: () => void;
   
   // Actions
   addPlanet: (planet: Planet) => void;
@@ -25,6 +27,13 @@ export const useEmpireStore = create<EmpireState>()(
       planets: {},
       pins: {},
       links: {},
+      setPlanets: (planets) => set(() => ({
+        planets: planets.reduce((acc, p) => {
+          acc[p.id] = p;
+          return acc;
+        }, {} as Record<number, Planet>)
+      })),
+      clear: () => set(() => ({ planets: {}, pins: {}, links: {} })),
 
       addPlanet: (planet) => set((state) => ({
         planets: { ...state.planets, [planet.id]: planet }

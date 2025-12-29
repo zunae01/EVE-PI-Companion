@@ -1,13 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
+import { useAuthStore, EveCharacter } from '../store/authStore';
 
-// Configuration - REPLACE THIS WITH YOUR CLIENT ID FROM developers.eveonline.com
+// Public client configuration (client secret is kept server-side in Netlify function)
 export const CLIENT_ID = import.meta.env.VITE_EVE_CLIENT_ID || '4d216fef040f44e49fe65dc5b0839b7d';
 export const CALLBACK_URL = import.meta.env.VITE_EVE_CALLBACK_URL || window.location.origin + '/callback';
-
+const AUTH_FUNCTION = '/.netlify/functions/esi-auth';
 const SSO_URL = 'https://login.eveonline.com/v2/oauth/authorize';
-const TOKEN_URL = 'https://login.eveonline.com/v2/oauth/token';
 
-// Scopes we identified earlier
+// Scopes required for PI data
 const SCOPES = [
   'esi-planets.manage_planets.v1',
   'esi-characters.read_planets.v1',
@@ -55,7 +55,6 @@ export async function login() {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  // Store verifier locally to verify callback later
   sessionStorage.setItem('pkce_state', state);
   sessionStorage.setItem('pkce_code_verifier', codeVerifier);
 
@@ -64,12 +63,53 @@ export async function login() {
     redirect_uri: CALLBACK_URL,
     client_id: CLIENT_ID,
     scope: SCOPES,
-    state: state,
+    state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256'
   });
 
   window.location.href = `${SSO_URL}?${params.toString()}`;
+}
+
+type AuthFunctionResponse = {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  tokenType: string;
+  character: {
+    id: number;
+    name: string;
+    owner: string;
+    scopes: string[];
+  }
+};
+
+async function callAuthFunction(payload: Record<string, string>) {
+  const res = await fetch(AUTH_FUNCTION, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || 'Authentication failed');
+  }
+
+  return res.json() as Promise<AuthFunctionResponse>;
+}
+
+function normalizeCharacter(data: AuthFunctionResponse): EveCharacter {
+  return {
+    CharacterID: data.character.id,
+    CharacterName: data.character.name,
+    CharacterOwnerHash: data.character.owner,
+    Scopes: data.character.scopes,
+    TokenType: data.tokenType,
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    ExpiresOn: new Date(Date.now() + data.expiresIn * 1000).toISOString()
+  };
 }
 
 /**
@@ -86,56 +126,50 @@ export async function handleCallback(urlParams: URLSearchParams) {
     throw new Error('Invalid state or missing code parameters');
   }
 
-  // Exchange code for token
-  const body = new URLSearchParams({
+  const data = await callAuthFunction({
     grant_type: 'authorization_code',
-    code: code,
-    client_id: CLIENT_ID,
+    code,
     code_verifier: codeVerifier,
-    redirect_uri: CALLBACK_URL, // Must match the original redirect_uri exactly
+    redirect_uri: CALLBACK_URL
   });
 
-  const response = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Host': 'login.eveonline.com'
-    },
-    body: body
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`Token exchange failed: ${err.error_description || response.statusText}`);
-  }
-
-  const data = await response.json();
-  
-  // Clean up
   sessionStorage.removeItem('pkce_state');
   sessionStorage.removeItem('pkce_code_verifier');
 
-  return parseTokenResponse(data);
+  return normalizeCharacter(data);
 }
 
 /**
- * Parses the raw token response and verifies the JWT signature (simplified for client-side)
- * Ideally, use a library like jwt-decode to extract the character info.
+ * Refresh access token via Netlify function
  */
-function parseTokenResponse(data: any) {
-  // Decode JWT to get character info
-  // The access_token is a JWT. The payload contains specific claims.
-  const payloadPart = data.access_token.split('.')[1];
-  const payload = JSON.parse(atob(payloadPart.replace(/-/g, '+').replace(/_/g, '/')));
+export async function refreshAccessToken(refreshToken: string) {
+  const data = await callAuthFunction({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken
+  });
+  return normalizeCharacter(data);
+}
 
-  return {
-    CharacterID: Number(payload.sub.split(':')[2]),
-    CharacterName: payload.name,
-    ExpiresOn: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-    Scopes: payload.scp, // Array or string depending on format
-    TokenType: data.token_type,
-    CharacterOwnerHash: payload.owner,
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token
-  };
+/**
+ * Ensures a valid token for the character, refreshing if needed.
+ */
+export async function getValidAccessToken(characterId: number) {
+  const store = useAuthStore.getState();
+  const char = store.characters[characterId];
+  if (!char) throw new Error('Character not found');
+
+  const expiresAt = new Date(char.ExpiresOn).getTime();
+  const bufferMs = 60_000; // refresh 1 minute early
+
+  if (Date.now() < expiresAt - bufferMs) {
+    return char.accessToken;
+  }
+
+  const refreshed = await refreshAccessToken(char.refreshToken);
+  store.updateTokens(characterId, { 
+    accessToken: refreshed.accessToken, 
+    refreshToken: refreshed.refreshToken, 
+    expiresOn: refreshed.ExpiresOn 
+  });
+  return refreshed.accessToken;
 }
